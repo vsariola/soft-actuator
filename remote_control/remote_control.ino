@@ -57,21 +57,20 @@ void loop() {
   potDC1 = 0; potDC2 = 0; potDC3 = 0; potDC4 = 0;
 
   if (Serial.available() > 0) {                    
-    automatic_value = Serial.read()/255.0;
+    automatic_value = Serial.read()*100.0/255.0;
     automatic = true;
   }
 
   // if statement for manual switch override
   if (digitalRead(50) == HIGH) {
     potDC1 = analogRead(A1)*100.0/1024.0; // scale values from pot to 0 to 100, which gets used for duty cycle percentage  
+    if (automatic) {
+      potDC1 = automatic_value;  
+    }
   } else {
     automatic = false;
   }
 
-  if (automatic) {
-    potDC1 = automatic_value;  
-  }
- 
   if (digitalRead(51) == HIGH) { potDC2 = analogRead(A2)*100.0/1024.0; }
   if (digitalRead(52) == HIGH) { potDC3 = analogRead(A3)*100.0/1024.0; }  
 
@@ -79,7 +78,7 @@ void loop() {
   PWMfq = round(PWMfq/5)*5+1; //1 to 91 Hz in increments of 5 (rounding helps to deal with noisy pot)
 
   if (automatic) {
-    PWMfq = 50;
+    PWMfq = 91;
   }   
 
   // update PWM output based on the above values from pots
@@ -98,7 +97,8 @@ void loop() {
   Serial.print(analogRead(A8)); Serial.print("\t");
   Serial.print(analogRead(A9)); Serial.print("\t");
   Serial.print(analogRead(A10)); Serial.print("\t");
-  Serial.print(analogRead(A11)); Serial.print("\n");
+  Serial.print(analogRead(A11)); Serial.print("\t");
+  Serial.print(PWMfq); Serial.print("\n");
 
   delay(200);
 }
