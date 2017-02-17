@@ -27,6 +27,8 @@ addParameter(p,'ramp',true,isBoolean);
 addParameter(p,'ramppause',0,@isnumeric);
 addParameter(p,'pause',0,@isnumeric);
 addParameter(p,'autosave',0,isnatural);
+addParameter(p,'serialport','COM3');
+addParameter(p,'devicename','Dev1');
 addParameter(p,'dataroot',defaultdataroot);
 parse(p,varargin{:});
 params = p.Results;
@@ -42,7 +44,7 @@ datafile = sprintf('%scycling_data.mat',datadir);
 
 delete(instrfindall); % delete all old objects from memory
 
-ictObj = icdevice('niDMM.mdd', 'Dev1');
+ictObj = icdevice('niDMM.mdd', params.devicename);
 connect(ictObj);
 disp(ictObj);
 
@@ -68,7 +70,7 @@ fprintf('The current resistance is: %d ohm\n', ohms);
 
 %%
 
-s = serial('COM3');
+s = serial(params.serialport);
 fopen(s);
 fgetl(s);
 

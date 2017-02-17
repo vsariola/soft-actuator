@@ -79,7 +79,7 @@ void loop() {
   PWMfq = round(PWMfq/5)*5+1; //1 to 91 Hz in increments of 5 (rounding helps to deal with noisy pot)
 
   if (automatic) {
-    PWMfq = 91;
+    PWMfq = 56;
   }   
 
   // update PWM output based on the above values from pots
