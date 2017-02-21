@@ -20,6 +20,7 @@ addParameter(p,'n',5,isnatural);
 addParameter(p,'minvalue',0.2,@isnumeric);
 addParameter(p,'maxvalue',0.7,@isnumeric);
 addParameter(p,'m',30,isnatural);        
+addParameter(p,'cycles',1,isnatural);        
 addParameter(p,'photofreq',3);       
 addParameter(p,'resistancebits',6.5);
 addParameter(p,'resistancerange',1000000,@isnumeric);
@@ -43,6 +44,14 @@ end
 datafile = sprintf('%scycling_data.mat',datadir);
 
 delete(instrfindall); % delete all old objects from memory
+
+
+upramp = linspace(params.minvalue,params.maxvalue,params.m+1);
+downramp = linspace(params.maxvalue,params.minvalue,params.m+1);
+onecycle = [upramp(2:end) downramp(2:end)];
+duty_cycles = [upramp(1) repmat(onecycle,1,params.cycles)];
+maxk = length(duty_cycles);
+data = zeros(maxk*params.n,9);
 
 ictObj = icdevice('niDMM.mdd', params.devicename);
 connect(ictObj);
@@ -76,11 +85,6 @@ fgetl(s);
 
 mkdir(datadir);
 
-upramp = linspace(params.minvalue,params.maxvalue,params.m+1);
-downramp = linspace(params.maxvalue,params.minvalue,params.m+1);
-duty_cycles = [upramp downramp(2:end)];
-maxk = length(duty_cycles);
-data = zeros(maxk*params.n,9);
 tic;
 k = 1;
 for i = 1:maxk
