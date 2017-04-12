@@ -73,7 +73,10 @@ void loop() {
   }
 
   if (digitalRead(51) == HIGH) { potDC2 = analogRead(A2)*100.0/1024.0; }
-  if (digitalRead(52) == HIGH) { potDC3 = analogRead(A3)*100.0/1024.0; }  
+
+  float tmp = analogRead(A3)*100.0/1024.0;
+  if (digitalRead(52) == HIGH) { potDC3 = tmp; }  
+  if (digitalRead(53) == HIGH) { potDC4 = tmp; }  
 
   float PWMfq = analogRead(A4)*100.0/1024.0; // scale values from pot to 0 to 100, which gets used for frequency (Hz)
   PWMfq = round(PWMfq/5)*5+1; //1 to 91 Hz in increments of 5 (rounding helps to deal with noisy pot)
@@ -83,7 +86,7 @@ void loop() {
   }   
 
   // update PWM output based on the above values from pots
-  pPWM(PWMfq,potDC1,potDC2,potDC3,potDC3);
+  pPWM(PWMfq,potDC1,potDC2,potDC3,potDC4);
 
   // transfer function for sensor Honeywell ASDXRRX100PGAA5 (100 psi, 5V, A-calibration)
   // Vout = 0.8*Vsupply/(Pmax - Pmin)*(Papplied - Pmin) + 0.1*Vsupply

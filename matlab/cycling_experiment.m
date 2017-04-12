@@ -119,6 +119,9 @@ for i = 1:maxk
         system(sprintf('"%s\\..\\canon\\canon_shooting.exe" 0',mydir));
         system(sprintf('"%s\\..\\canon\\canon_save.exe" 1 %s',mydir,datadir));
         listing = dir(sprintf('%s\\*.CR2',datadir));
+        if (isempty(listing))
+            listing = dir(sprintf('%s\\*.JPG',datadir));
+        end        
         [~,dx] = sort([listing.datenum],'descend');
         newest = listing(dx(1)).name;
         expression = 'IMG_(\d+)';
