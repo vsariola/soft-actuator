@@ -118,15 +118,15 @@ for i = 1:maxk
     if (mod(i-1,params.photofreq) == 0)
         system(sprintf('"%s\\..\\canon\\canon_shooting.exe" 0',mydir));
         system(sprintf('"%s\\..\\canon\\canon_save.exe" 1 %s',mydir,datadir));
-        listing = dir(sprintf('%s\\*.CR2',datadir));
-        if (isempty(listing))
-            listing = dir(sprintf('%s\\*.JPG',datadir));
-        end        
-        [~,dx] = sort([listing.datenum],'descend');
-        newest = listing(dx(1)).name;
-        expression = 'IMG_(\d+)';
-        tokens = regexp(newest,expression,'tokens');
-        data(k,9) = str2double(tokens{1}{1});   
+%         listing = dir(sprintf('%s\\*.CR2',datadir));
+%         if (isempty(listing))
+%             listing = dir(sprintf('%s\\*.JPG',datadir));
+%         end        
+%         [~,dx] = sort([listing.datenum],'descend');
+%         newest = listing(dx(1)).name;
+%         expression = 'IMG_(\d+)';
+%         tokens = regexp(newest,expression,'tokens');
+%         data(k,9) = str2double(tokens{1}{1});   
     end
     fprintf('%.0f%% completed of the cycle\n',i*100/maxk);    
     if (mod(i-1,params.autosave) == 0)
