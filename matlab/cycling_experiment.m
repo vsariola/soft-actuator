@@ -30,6 +30,8 @@ addParameter(p,'pause',0,@isnumeric);
 addParameter(p,'autosave',0,isnatural);
 addParameter(p,'serialport','COM3');
 addParameter(p,'devicename','Dev1');
+addParameter(p,'temperature',false,isBoolean);
+addParameter(p,'temperaturedevicename','Dev2');
 addParameter(p,'dataroot',defaultdataroot);
 parse(p,varargin{:});
 params = p.Results;
@@ -51,7 +53,12 @@ downramp = linspace(params.maxvalue,params.minvalue,params.m+1);
 onecycle = [upramp(2:end) downramp(2:end)];
 duty_cycles = [upramp(1) repmat(onecycle,1,params.cycles)];
 maxk = length(duty_cycles);
-data = zeros(maxk*params.n,9);
+
+if (params.temperature)
+    data = zeros(maxk*params.n,10);
+else
+    data = zeros(maxk*params.n,9);
+end
 
 ictObj = icdevice('niDMM.mdd', params.devicename);
 connect(ictObj);
@@ -76,6 +83,15 @@ acquisition = get(ictObj, 'acquisition');
 ohms =  invoke(acquisition, 'read', AutoTimeLimit);
 
 fprintf('The current resistance is: %d ohm\n', ohms);
+
+if (params.temperature)
+    s = daq.createSession('ni');
+    addAnalogInputChannel(s,params.temperaturedevicename,0, 'Thermocouple');   
+    tc = s.Channels(1);
+    set(tc);
+    tc.ThermocoupleType = 'J';    
+    tc.Units = 'Celsius';
+end
 
 %%
 
@@ -112,7 +128,11 @@ for i = 1:maxk
         line = fgetl(s);
         linevals = cell2mat(textscan(line,'%f'));
         ohms =  invoke(acquisition, 'read', AutoTimeLimit);
-        data(k,:) = [d ohms linevals' toc 0];
+        if (params.temperature)
+            data(k,:) = [d ohms linevals' toc 0 s.inputSingleScan()];
+        else
+            data(k,:) = [d ohms linevals' toc 0];
+        end
         k = k + 1;
     end
     if (mod(i-1,params.photofreq) == 0)
