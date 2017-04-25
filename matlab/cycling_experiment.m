@@ -85,9 +85,9 @@ ohms =  invoke(acquisition, 'read', AutoTimeLimit);
 fprintf('The current resistance is: %d ohm\n', ohms);
 
 if (params.temperature)
-    s = daq.createSession('ni');
-    addAnalogInputChannel(s,params.temperaturedevicename,0, 'Thermocouple');   
-    tc = s.Channels(1);
+    ss = daq.createSession('ni');
+    addAnalogInputChannel(ss,params.temperaturedevicename,0, 'Thermocouple');   
+    tc = ss.Channels(1);
     set(tc);
     tc.ThermocoupleType = 'J';    
     tc.Units = 'Celsius';
@@ -129,7 +129,7 @@ for i = 1:maxk
         linevals = cell2mat(textscan(line,'%f'));
         ohms =  invoke(acquisition, 'read', AutoTimeLimit);
         if (params.temperature)
-            data(k,:) = [d ohms linevals' toc 0 s.inputSingleScan()];
+            data(k,:) = [d ohms linevals' toc 0 ss.inputSingleScan()];
         else
             data(k,:) = [d ohms linevals' toc 0];
         end
