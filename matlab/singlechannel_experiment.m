@@ -24,7 +24,7 @@ addParameter(p,'temperature',false,isBoolean);
 addParameter(p,'temperaturedevicename','Dev2');
 addParameter(p,'dataroot',defaultdataroot);
 addParameter(p,'n',5);
-addParameter(p,'steptime',30);
+addParameter(p,'steptime',15);
 parse(p,varargin{:});
 params = p.Results;
 
@@ -65,7 +65,7 @@ end
 
 %%
 
-prog = [0 1 0 1 0 0 0 0 0 0];
+prog = [0 1 0 1 0 0 0] * 0.5;
 
 s = serial(params.serialport);
 fopen(s);
@@ -91,7 +91,7 @@ while(true)
         fprintf('%.0f%% completed of the cycle\n',(knew-1)/maxk*100);    
     end
     k = knew;    
-    c1 = uint8(prog(1,k) * 3);    
+    c1 = uint8(prog(1,k) * 255);    
     fwrite(s,c1);
     flushinput(s);
     fgetl(s);
