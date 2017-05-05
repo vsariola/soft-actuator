@@ -23,7 +23,8 @@ addParameter(p,'devicename','Dev1');
 addParameter(p,'temperature',false,isBoolean);
 addParameter(p,'temperaturedevicename','Dev2');
 addParameter(p,'dataroot',defaultdataroot);
-addParameter(p,'steptime',10);
+addParameter(p,'n',5);
+addParameter(p,'steptime',5);
 parse(p,varargin{:});
 params = p.Results;
 
@@ -64,7 +65,7 @@ end
 
 %%
 
-prog = [0 0 0 0;1 0 0 0;0 0 0 0;0 1 0 0;0 0 0 0;0 0 1 0;0 0 0 0]';
+prog = [0 0 0 0;0 0 0 0;0 0 0 0;0 0 0 0;0 0 0 0;1 0 0 0;0 0 0 0;0 1 0 0;0 0 0 0;0 0 1 0;0 0 0 0;0 0 0 0;0 0 0 0;0 0 0 0;0 0 0 0]';
 
 s = serial(params.serialport);
 fopen(s);
@@ -87,7 +88,7 @@ while(true)
         break;
     end
     if (knew > k)
-        fprintf('%.0f%% completed of the cycle\n',(knew-1)/maxk);    
+        fprintf('%.0f%% completed of the cycle\n',(knew-1)/maxk*100);    
     end
     k = knew;    
     c1 = uint8(prog(1,k) * 3);
@@ -95,21 +96,25 @@ while(true)
     c3 = bitshift(uint8(prog(3,k) * 3),4);
     c4 = bitshift(uint8(prog(4,k) * 3),6);
     fwrite(s,c1+c2+c3+c4);
+    flushinput(s);
+    fgetl(s);
     line = fgetl(s);
     linevals = cell2mat(textscan(line,'%f'));
-    ohms =  invoke(acquisition, 'read', AutoTimeLimit);
-    if (params.temperature)
-        data(end+1,:) = [d ohms linevals' time k ss.inputSingleScan()];
-    else
-        data(end+1,:) = [d ohms linevals' time k];
-    end        
+    for z = 1:params.n
+        ohms =  invoke(acquisition, 'read', AutoTimeLimit);
+        if (params.temperature)
+            data(end+1,:) = [ohms linevals' time k ss.inputSingleScan()];
+        else
+            data(end+1,:) = [ohms linevals' time k];
+        end        
+    end
     if (mod(i,params.autosave) == 0)
         save(datafile,'data','params');
     end
     i = i + 1;
 end      
 
-fwrite(s,uint8(255));
+fwrite(s,uint8(0));
 fclose(s);
 
 save(datafile,'data','params');
