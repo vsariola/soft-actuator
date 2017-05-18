@@ -9,6 +9,8 @@ float potDC4 = 0;
 
 byte scaling = 0xFF;
 
+bool automode = false;
+
 void setup() {
 
   Serial.begin(9600);
@@ -57,7 +59,8 @@ void loop() {
   potDC1 = 0; potDC2 = 0; potDC3 = 0; potDC4 = 0;
 
   if (Serial.available() > 0) {                    
-    scaling = Serial.read();    
+    scaling = Serial.read();   
+    automode = true; 
   }
 
   // if statement for manual switch override
@@ -67,9 +70,13 @@ void loop() {
   float tmp = analogRead(A3)*100.0/1024.0;
   if (digitalRead(52) == HIGH) { potDC3 = tmp * (((scaling & 0x30) >> 4) / 3.0); }  
   if (digitalRead(53) == HIGH) { potDC4 = tmp * (((scaling & 0xC0) >> 6) / 3.0); }  
-
+  
   float PWMfq = analogRead(A4)*100.0/1024.0; // scale values from pot to 0 to 100, which gets used for frequency (Hz)
   PWMfq = round(PWMfq/5)*5+1; //1 to 91 Hz in increments of 5 (rounding helps to deal with noisy pot)
+
+  if (automode) {
+    PWMfq = 56;
+  }
 
   // update PWM output based on the above values from pots
   pPWM(PWMfq,potDC1,potDC2,potDC3,potDC4);

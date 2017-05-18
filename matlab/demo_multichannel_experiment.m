@@ -3,7 +3,7 @@ function [data,params,datadir] = demo_multichannel_experiment(varargin)
     isnatural = @(x) x == floor(x);
     isBoolean = @(x) islogical(x) || isnumeric(x) && all(x(:)==0 | x(:)==1);
 
-    prog = [0 0 0 0;0 0 0 0;0 0 0 0;0 0 0 0;0 0 0 0;1 0 0 0;0 0 0 0;0 1 0 0;0 0 0 0;0 0 1 0;0 0 0 0;0 0 0 0;0 0 0 0;0 0 0 0;0 0 0 0]';
+    prog = [0 0 0 0;1 0 0 0;0 0 0 0;0 1 0 0;0 0 0 0;0 0 1 0;0 0 0 0;0 0 0 0;]';
 
     peekdefaults = ~isempty(varargin) && strcmp(varargin{1},'defaults');
     if (peekdefaults)    
@@ -25,7 +25,7 @@ function [data,params,datadir] = demo_multichannel_experiment(varargin)
     addParameter(p,'temperaturedevicename','Dev2');
     addParameter(p,'dataroot',defaultdataroot);
     addParameter(p,'n',5);
-    addParameter(p,'steptime',5);
+    addParameter(p,'steptime',30);
     parse(p,varargin{:});
     params = p.Results;
 
@@ -131,9 +131,6 @@ function [data,params,datadir] = demo_multichannel_experiment(varargin)
 
     nis.wait();
     
-    save(datafile,'data','straindata','params');
-    disconnect(ictObj);
-    delete(ictObj);
-    clear ictObj;
+    save(datafile,'data','straindata','params','prog');
     
 end
