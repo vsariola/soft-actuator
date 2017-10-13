@@ -32,6 +32,8 @@ if (peekdefaults)
     return;
 end
 
+analogTokPa = @(x) (x/1024.0 - 0.1)*100.0/0.8 * 6.89475729;
+
 datafile = sprintf('%scycling_data.mat',datadir);
 
 upramp = linspace(params.minvalue,params.maxvalue,params.numsteps+1);
@@ -62,7 +64,7 @@ for i = 1:maxk
     for j = 1:params.pressuremeasurementsperstep
         line = fgetl(s);
         linevals = cell2mat(textscan(line,'%f'));        
-        data(k,:) = [d linevals(1) toc];
+        data(k,:) = [d analogTokPa(linevals(1)) toc];
         k = k + 1;
     end
     fprintf('%.0f%% completed of the cycle\n',i*100/maxk);    
