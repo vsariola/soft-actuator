@@ -1,5 +1,5 @@
 int prescaler = 256; // set this to match whatever prescaler value you set in CS registers below
-int speed = 200; // average the pressure measurements from this many samples
+int speed = 1000; // average the pressure measurements from this many samples
 
 // intialize values for the PWM duty cycle set by pots
 float potDC1 = 0;
@@ -82,7 +82,7 @@ void loop() {
   PWMfq = round(PWMfq/5)*5+1; //1 to 91 Hz in increments of 5 (rounding helps to deal with noisy pot)
 
   if (automatic) {
-    PWMfq = 56;
+    PWMfq = 100;
   }   
 
   // update PWM output based on the above values from pots
@@ -103,13 +103,9 @@ void loop() {
   for(int i = 0;i < speed;i++)
   {
     c1 = c1 + analogRead(A8);
-    c2 = c2 + analogRead(A9);
-    c3 = c3 + analogRead(A10);
-    c4 = c4 + analogRead(A11);    
   }
   Serial.print(c1 / speed); Serial.print("\t");
-  Serial.print(c2 / speed); Serial.print("\t");
-  Serial.print(c3 / speed); Serial.print("\t");
-  Serial.print(c4 / speed); Serial.print("\t");
   Serial.print(PWMfq); Serial.print("\n");
 }
+
+
