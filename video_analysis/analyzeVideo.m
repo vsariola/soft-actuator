@@ -1,17 +1,53 @@
-function results = analyze_video(filename,showplots)    
+function retCurvature = analyzeVideo(filename,showplots,skipping)    
+    % analyzeVideo  Finds the curvature of a soft fluidic actuator
+    %   from a video. The curvature is estimated by using machine vision
+    %   to find the pixels on the lower edge of the actuator. To calibrate
+    %   the scale (pixels per cm), asks the user to click two points
+    %   in the video and input the known distance (in cm) between these
+    %   points. Also asks the user to click on a point near the beginning
+    %   (left most edge) of the actuator. NOTE: when clicking on the first
+    %   point on the actuator edge, click slightly outside the aluminum
+    %   frame area. Detecting the edge of the actuator against the black
+    %   background is much more reliable.
+    % 
+    %   curvature = analyzeVideo('/path/to/video.MOV')
+    %     Analyzes the video file and returns the curvature.
+    %
+    %   curvature = analyzeVideo(...,true)
+    %     Also plots the pixels found on the lower edge for every 20th
+    %     frame analyzed. Useful for debugging purposes; make sure that
+    %     the code detects the pixels on the lower edge correctly.
+    %
+    %   curvature = analyzeVideo(...,true,skipping)
+    %     skipping is the number of frames between every analyzed frame.
+    %     By default, skipping is 50 i.e. if the video is 50 frames per
+    %     second, 1 frame per second is analyzed. Setting skipping to 1
+    %     analyzes every frame.
+
     if (nargin < 2)
         showplots = 0;
+    end
+    
+    if (nargin < 3)
+        % The videos are 50 fps, so analyze 1 frame per second
+        skipping = 50;
     end
 
     v = VideoReader(filename);
     i = 1;
-    N = v.Duration * v.FrameRate;
-    results = zeros(N,1);
+    j = 1;
+    N = ceil(v.Duration * v.FrameRate / skipping);
+    
+    retCurvature = zeros(N,1);
     centimetersPerPixel = [];
     startingPoint = [];
     
+    tic;
     while hasFrame(v)
-        img = readFrame(v);
+        while hasFrame(v) && j > 0
+            img = readFrame(v);
+            j = j - 1;
+        end        
         
         if isempty(centimetersPerPixel)
             centimetersPerPixel = askCentimetersPerPixel(255 - img);
@@ -21,19 +57,21 @@ function results = analyze_video(filename,showplots)
             startingPoint = askStartingPoint(255 - img);
         end
 
-        nthFrame = mod(i,1000) == 1;
+        nthFrame = mod(i,20) == 1;
         
         curvatureInvMeters = findCurvature(...
             img,...
             startingPoint,...            
             centimetersPerPixel,...
             nthFrame && showplots);
-        results(i) = curvatureInvMeters;
-        if (nthFrame)
-            fprintf('Analyzing frame %d / %d (%.2f%% done)\n',i,N,i*100/N);
+        retCurvature(i) = curvatureInvMeters;
+        if (nthFrame || i == N)
+            fprintf('Analyzed frame %d / %d (%.2f%% done)\n',i,N,i*100/N);
         end
+        j = skipping;
         i = i + 1;    
-    end
+    end 
+    toc
 end
 
 function retCurvature = findCurvature(img,x0,centimetersPerPixel,showPlot)
@@ -44,7 +82,7 @@ function retCurvature = findCurvature(img,x0,centimetersPerPixel,showPlot)
     lengthPixels = lengthCentimeters/centimetersPerPixel;
     
     % Number of points to be found along the edge
-    numSteps = 30;
+    numSteps = 10;
     
     % The number of pixels to be checked for each 
     scanWidthPixels = 20;
@@ -55,26 +93,27 @@ function retCurvature = findCurvature(img,x0,centimetersPerPixel,showPlot)
     grayImg = double(rgb2gray(img));
     p = findEdgePixels(grayImg,x0,lengthPixels,numSteps,scanWidthPixels);
     
-    initialR = 100/(curvatureInvMeters*centimetersPerPixel);
-    initialC = x0+[0 initialR];    
-    % Distance to circle edge compute
-    distanceToCircleEdge = @(p,cx,cy,radius) ...
-        sqrt(sum([p(:,1)-cx,p(:,2)-cy].^2,2))-radius;
-    % The costfun calculates the sum of absolute distances of each pixel to 
-    % circle edge    
-    costfun = @(x) sum(abs(distanceToCircleEdge(p,x(1),x(2),x(3))));
-    xOpt = fminsearch(costfun,[initialC initialR]);
+    % https://en.wikipedia.org/wiki/Menger_curvature#Definition
+    % and https://math.stackexchange.com/a/516224
+    x = p(1:(end-2),:);
+    y = p(2:(end-1),:);
+    z = p(3:end,:);
+    xy = x-y;
+    zy = z-y;
+    A = (xy(:,2).*zy(:,1)-xy(:,1).*zy(:,2))/2;
+    xz = x-z;
+    n = @(x) sqrt(sum(x.^2,2));
+    c = 4*A ./ (n(xy) .* n(zy) .* n(xz));
+    
+    retCurvature = mean(c)/centimetersPerPixel*100;
     
     if (showPlot)
        imshow(img);
-       hold on;
-       viscircles(xOpt(1:2),xOpt(3))
+       hold on;       
        plot(p(:,1),p(:,2),'bx');
        hold off;
        drawnow;
-    end
-    
-    retCurvature = 1/(xOpt(3)*centimetersPerPixel/100);
+    end   
 end
 
 function p = findEdgePixels(grayImg,x0,lengthPixels,numSteps,scanwidthPixels)        
@@ -85,11 +124,11 @@ function p = findEdgePixels(grayImg,x0,lengthPixels,numSteps,scanwidthPixels)
     % sigmaPosPixels is weighting applied to the detected edge. Higher 
     % weight is given to center i.e. an edge that follows straight line
     % from the previous edge    
-    sigmaPosPixels = 5; 
+    sigmaPosPixels = 10; 
     % sigmaDerPixels is the pixel constant of the low pass filter which is
     % applied to the image before taking the first derivative to find 
     % the edge
-    sigmaDerPixels = 5;    
+    sigmaDerPixels = 1;    
     x = x0; % Starting point
     u = [1 0]; % The first scan line is perfectly vertical    
         
@@ -98,7 +137,7 @@ function p = findEdgePixels(grayImg,x0,lengthPixels,numSteps,scanwidthPixels)
     scanSteps = scanwidthPixels*2-1; % The edge position is found with half pixel accuracy
     pixelsPerScanStep = scanwidthPixels / scanSteps;
         
-    sigmaDerSteps = sigmaDerPixels / pixelsPerScanStep;
+    sigmaDerSteps = round(sigmaDerPixels / pixelsPerScanStep);
     % Using a filter longer than 6*sigma or 3*sigma on both sides is
     % unneccesary. Note that ('der',1) parameter performs gaussian low pass
     % filtering and derivative estimation in same filtering step 
@@ -159,6 +198,7 @@ function ret = askCentimetersPerPixel(img)
             centimeters = str2double(centimeters{1});
             pixels = norm(p(1,:) - p(2,:));
             ret = centimeters / pixels;
+            close(gcf);
             return;
         end
         if (strcmp(choice,'Quit'))
@@ -170,7 +210,8 @@ end
 function ret = askStartingPoint(img)
     while(1)
         imshow(img);
-        title('Click on a point near the left edge of the actuator. The point should be outside the frame area.');
+        set(gcf, 'units','normalized','outerposition',[0 0 1 1]);
+        title('Click on a point on the bottom edge of the actuator, on the side mounted to the aluminum frame. The point should be slightly outside the aluminum frame area.');
         p = ginput(1);        
         hold on;
         plot(p(:,1),p(:,2),'r*');
@@ -178,6 +219,7 @@ function ret = askStartingPoint(img)
         choice = questdlg('Is this starting point OK?','OK?','OK','Pick again','Quit','OK');
         if (strcmp(choice,'OK'))
             ret = p;
+            close(gcf);
             return;
         end
         if (strcmp(choice,'Quit'))
