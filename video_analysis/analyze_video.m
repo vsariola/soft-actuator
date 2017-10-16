@@ -1,72 +1,145 @@
-function results = analyze_video(filename,length_pixels,show_results)
+function results = analyze_video(filename,showplots)    
     if (nargin < 2)
-        length_pixels = 200;
-    end
-
-    if (nargin < 3)
-        show_results = 0;
+        showplots = 0;
     end
 
     v = VideoReader(filename);
     i = 1;
     N = v.Duration * v.FrameRate;
     results = zeros(N,1);
-    millimetersPerPixel = [];
+    centimetersPerPixel = [];
     startingPoint = [];
     
     while hasFrame(v)
         img = readFrame(v);
         
-        if isempty(millimetersPerPixel)
-            millimetersPerPixel = askMillimetersPerPixel(255 - img);
+        if isempty(centimetersPerPixel)
+            centimetersPerPixel = askCentimetersPerPixel(255 - img);
         end     
         
         if isempty(startingPoint)
             startingPoint = askStartingPoint(255 - img);
         end
 
-        curvature_pixels = find_curvature_pixels(...
+        nthFrame = mod(i,1000) == 1;
+        
+        curvatureInvMeters = findCurvature(...
             img,...
-            startingPoint,....
-            mod(i,100) == 0 && showresults);
-        results(i) =  * millimetersPerPixel;
-        if (mod(i,100) == 0)
+            startingPoint,...            
+            centimetersPerPixel,...
+            nthFrame && showplots);
+        results(i) = curvatureInvMeters;
+        if (nthFrame)
             fprintf('Analyzing frame %d / %d (%.2f%% done)\n',i,N,i*100/N);
         end
         i = i + 1;    
     end
 end
 
-function ret = find_curvature(img,x0,length_pixels,do_plot)
-    theta = linspace(0.001,1.3*pi,1000);
-    k = theta./length_pixels;
-    x = sin(theta)./k+x0(1);
-    y = (1-cos(theta))./k+x0(2);
-    g = double(rgb2gray(abs(img2-img1)))/255; 
-    c = interp2(g,x,y);
-    i = firstPeak(c);
-    if (do_plot)
-        imshow(img2);
-        hold on;
-        plot(x,y);
-        plot(x(i),y(i),'*');
-        hold off;
-        drawnow;
-    end
-    ret = k(i);
+function retCurvature = findCurvature(img,x0,centimetersPerPixel,showPlot)
+    % Length of the curve to be looked for. Actuator should be somewhat
+    % shorter than this, or the edge finding will continue beyond the
+    % end of the actuator
+    lengthCentimeters = 6;    
+    lengthPixels = lengthCentimeters/centimetersPerPixel;
     
-    function ret = firstPeak(arr)
-        sigma = 16;
-        kern = ndgauss(3*sigma,sigma,'der',1);
-        kern = kern / sqrt(sum(kern.^2));
-        filt = conv(arr,kern,'same');
-        [py,px] = findpeaks(-filt);
-        px = px(py > 0.5);
-        ret = px(end);
-    end 
+    % Number of points to be found along the edge
+    numSteps = 30;
+    
+    % The number of pixels to be checked for each 
+    scanWidthPixels = 20;
+    
+    % Initial guess for curvature, in units of m^-1
+    curvatureInvMeters = 5;
+
+    grayImg = double(rgb2gray(img));
+    p = findEdgePixels(grayImg,x0,lengthPixels,numSteps,scanWidthPixels);
+    
+    initialR = 100/(curvatureInvMeters*centimetersPerPixel);
+    initialC = x0+[0 initialR];    
+    % Distance to circle edge compute
+    distanceToCircleEdge = @(p,cx,cy,radius) ...
+        sqrt(sum([p(:,1)-cx,p(:,2)-cy].^2,2))-radius;
+    % The costfun calculates the sum of absolute distances of each pixel to 
+    % circle edge    
+    costfun = @(x) sum(abs(distanceToCircleEdge(p,x(1),x(2),x(3))));
+    xOpt = fminsearch(costfun,[initialC initialR]);
+    
+    if (showPlot)
+       imshow(img);
+       hold on;
+       viscircles(xOpt(1:2),xOpt(3))
+       plot(p(:,1),p(:,2),'bx');
+       hold off;
+       drawnow;
+    end
+    
+    retCurvature = 1/(xOpt(3)*centimetersPerPixel/100);
 end
 
-function ret = askMillimetersPerPixel(img)
+function p = findEdgePixels(grayImg,x0,lengthPixels,numSteps,scanwidthPixels)        
+    % alpha is a filtering parameter for the edge detection, [0,1]
+    % Smaller values are less sensitive to misdetection but respond to 
+    % the curving of the edge slower.
+    alpha = 0.5; 
+    % sigmaPosPixels is weighting applied to the detected edge. Higher 
+    % weight is given to center i.e. an edge that follows straight line
+    % from the previous edge    
+    sigmaPosPixels = 5; 
+    % sigmaDerPixels is the pixel constant of the low pass filter which is
+    % applied to the image before taking the first derivative to find 
+    % the edge
+    sigmaDerPixels = 5;    
+    x = x0; % Starting point
+    u = [1 0]; % The first scan line is perfectly vertical    
+        
+    p = zeros(numSteps,2);
+    delta = lengthPixels/(numSteps-1);
+    scanSteps = scanwidthPixels*2-1; % The edge position is found with half pixel accuracy
+    pixelsPerScanStep = scanwidthPixels / scanSteps;
+        
+    sigmaDerSteps = sigmaDerPixels / pixelsPerScanStep;
+    % Using a filter longer than 6*sigma or 3*sigma on both sides is
+    % unneccesary. Note that ('der',1) parameter performs gaussian low pass
+    % filtering and derivative estimation in same filtering step 
+    derFilter = ndgauss(round(6*sigmaDerSteps+1),sigmaDerSteps,'der',1); 
+        
+    sigmaPosSteps = sigmaPosPixels / pixelsPerScanStep;
+    weights = ndgauss(scanSteps,sigmaPosSteps)';    
+    
+    for i = 1:numSteps
+        % u is current direction parallel to the edge, v is perpendicular
+        v = [-u(2) u(1)];
+        p1 = x + v * (scanwidthPixels-1) / 2;
+        p2 = x - v * (scanwidthPixels-1) / 2;
+        p(i,:) = scanEdgeAlongLine(grayImg,p1,p2,scanSteps,derFilter,weights);
+        
+        if (i > 1)
+            % When we have found at least 2 points, update the 
+            % direction which is considered parallel to the edge
+            nu = p(i,:) - p(i-1,:);
+            nu = nu / norm(nu,2);
+            % Filter the change in u, to avoid a single misdetection 
+            % ruining everything
+            u = (1-alpha) * u + alpha * nu;
+            u = u / norm(u,2);        
+        end
+               
+        x = p(i,:) + u * delta;
+    end       
+end
+
+function p = scanEdgeAlongLine(grayImg,p1,p2,N,derFilter,weights)    
+    xx = linspace(p1(1),p2(1),N);
+    yy = linspace(p1(2),p2(2),N);
+    arr = interp2(grayImg,xx,yy);
+    filt = conv(arr,derFilter,'same');
+    weighted = filt .* weights;
+    [~,ind] = max(weighted);        
+    p = [xx(ind) yy(ind)];
+end
+
+function ret = askCentimetersPerPixel(img)
     while(1)
         imshow(img);
         set(gcf, 'units','normalized','outerposition',[0 0 1 1]);
@@ -112,6 +185,33 @@ function ret = askStartingPoint(img)
         end
     end       
 end
+
+%% code from ndgauss w/ license
+
+% Copyright (c) 2010, Avan Suinesiaputra
+% All rights reserved.
+% 
+% Redistribution and use in source and binary forms, with or without
+% modification, are permitted provided that the following conditions are
+% met:
+% 
+%     * Redistributions of source code must retain the above copyright
+%       notice, this list of conditions and the following disclaimer.
+%     * Redistributions in binary form must reproduce the above copyright
+%       notice, this list of conditions and the following disclaimer in
+%       the documentation and/or other materials provided with the distribution
+% 
+% THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+% AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+% IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+% ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+% LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+% CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+% SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+% INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+% CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+% ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+% POSSIBILITY OF SUCH DAMAGE.
 
 function h = hermite(n,x)
     % HERMITE: compute the Hermite polynomials.
@@ -173,10 +273,10 @@ function h = hermite(n,x)
 end
 
 function h = hermite_rec(n)
-% This is the reccurence construction of a Hermite polynomial, i.e.:
-%   H0(x) = 1
-%   H1(x) = 2x
-%   H[n+1](x) = 2x Hn(x) - 2n H[n-1](x)
+    % This is the reccurence construction of a Hermite polynomial, i.e.:
+    %   H0(x) = 1
+    %   H1(x) = 2x
+    %   H[n+1](x) = 2x Hn(x) - 2n H[n-1](x)
 
     if( 0==n ), h = 1;
     elseif( 1==n ), h = [2 0];
